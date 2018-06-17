@@ -73,6 +73,14 @@ func (p *promHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+
+	// NK Temp
+	if (strings.HasPrefix(r.URL.Path, "/vizgraph")) {
+		w.Header().Set("Access-Control-Allow-Origin", "http://localhost:8080")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+		w.Header().Set("Content-Type", "application/json")
+	}
+
 	err = p.writer(w, g)
 	if err != nil {
 		writeError(w, err)
