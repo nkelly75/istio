@@ -91,6 +91,7 @@ func main() {
 	http.Handle("/vizgraph", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON))
 	http.Handle("/vizgraph1", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON1))
 	http.Handle("/vizgraph2", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON2))
+	http.Handle("/vizgraph3", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON3))
 
 	log.Printf("Starting servicegraph service at %s", *bindAddr)
 	log.Fatal(http.ListenAndServe(*bindAddr, nil))

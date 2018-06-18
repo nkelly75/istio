@@ -40,6 +40,13 @@ type (
 		Target int        `json:"target"`
 		Labels Attributes `json:"labels"`
 	}
+
+	vizNode struct {
+		Name string     `json:"name"`
+		Renderer string `json:"renderer"`
+		Class string `json:"class,omitempty"`
+		Nodes []vizNode `json:"nodes,omitempty"`
+	}
 )
 
 func indexOfV(nodes []vizzzNode, name string) (int, error) {
@@ -109,4 +116,26 @@ func GenerateVizJSON2(w io.Writer, g *Dynamic) error {
 	}
 
 	return err
+}
+
+func GenerateVizJSON3(w io.Writer, g *Dynamic) error {
+	n := vizNode {
+		Name: "edge",
+		Renderer: "global",
+		Nodes: make([]vizNode, 0, 2),
+	}
+	r1 := vizNode{
+		Name: "INTERNET",
+		Renderer: "region",
+		Class: "normal",
+	}
+	n.Nodes = append(n.Nodes, r1)
+	r2 := vizNode{
+		Name: "us-east-1",
+		Renderer: "region",
+		Class: "normal",
+	}
+	n.Nodes = append(n.Nodes, r2)
+
+	return json.NewEncoder(w).Encode(n)
 }
