@@ -21,6 +21,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"time"
 )
 
 type (
@@ -41,11 +42,25 @@ type (
 		Labels Attributes `json:"labels"`
 	}
 
+	vizMetrics struct {
+		Normal float32  `json:"normal"`
+		Danger float32  `json:"danger"`
+	}
+
+	vizConnection struct {
+		Source string      `json:"source"`
+		Target string      `json:"target"`
+		Class string       `json:"class,omitempty"`
+		Metrics vizMetrics `json:"metrics,omitempty"`
+	}
+
 	vizNode struct {
-		Name string     `json:"name"`
-		Renderer string `json:"renderer"`
-		Class string `json:"class,omitempty"`
-		Nodes []vizNode `json:"nodes,omitempty"`
+		Name string                 `json:"name"`
+		Renderer string             `json:"renderer"`
+		Class string                `json:"class,omitempty"`
+		Nodes []vizNode             `json:"nodes,omitempty"`
+		Connections []vizConnection `json:"connections,omitempty"`
+		Updated int64               `json:"udpated,omitempty"`
 	}
 )
 
@@ -123,19 +138,27 @@ func GenerateVizJSON3(w io.Writer, g *Dynamic) error {
 		Name: "edge",
 		Renderer: "global",
 		Nodes: make([]vizNode, 0, 2),
+		Connections: make([]vizConnection, 0, 1),
 	}
-	r1 := vizNode{
+	n.Nodes = append(n.Nodes, vizNode{
 		Name: "INTERNET",
 		Renderer: "region",
 		Class: "normal",
-	}
-	n.Nodes = append(n.Nodes, r1)
-	r2 := vizNode{
-		Name: "us-east-1",
+	})
+	n.Nodes = append(n.Nodes, vizNode{
+		Name: "k8s-ist-1",
 		Renderer: "region",
 		Class: "normal",
-	}
-	n.Nodes = append(n.Nodes, r2)
+		Updated: time.Now().UnixNano() / 1000000,
+	})
+	n.Connections = append(n.Connections, vizConnection {
+		Source: "INTERNET",
+		Target: "k8s-ist-1",
+		Metrics: vizMetrics {
+			Normal: 26037.626,
+			Danger: 92.37,
+		},
+	})
 
 	return json.NewEncoder(w).Encode(n)
 }
