@@ -22,6 +22,8 @@ import (
 	"log"
 	"os"
 	"time"
+
+	// "github.com/gorilla/websocket"
 )
 
 type (
@@ -56,7 +58,7 @@ type (
 
 	vizNode struct {
 		Name string                 `json:"name"`
-		Renderer string             `json:"renderer"`
+		Renderer string             `json:"renderer,omitempty"`
 		Class string                `json:"class,omitempty"`
 		Nodes []vizNode             `json:"nodes,omitempty"`
 		Connections []vizConnection `json:"connections,omitempty"`
@@ -145,12 +147,39 @@ func GenerateVizJSON3(w io.Writer, g *Dynamic) error {
 		Renderer: "region",
 		Class: "normal",
 	})
-	n.Nodes = append(n.Nodes, vizNode{
+
+	istNode := vizNode{
 		Name: "k8s-ist-1",
 		Renderer: "region",
 		Class: "normal",
 		Updated: time.Now().UnixNano() / 1000000,
-	})
+		Nodes: make([]vizNode, 0, len(g.Nodes)),
+		Connections: make([]vizConnection, 0, len(g.Edges)),
+	}
+	for k := range g.Nodes {
+		n := vizNode{
+			Name: k,
+		}
+		istNode.Nodes = append(istNode.Nodes, n)
+	}
+
+	log.Print(g.Edges)
+
+	for _, v := range g.Edges {
+		log.Print(v)
+
+		l := vizConnection {
+			Source: v.Source,
+			Target: v.Target,
+			Metrics: vizMetrics {
+				Normal: 1000,
+				Danger: 100,
+			},
+		}
+		istNode.Connections = append(istNode.Connections, l)
+	}
+
+	n.Nodes = append(n.Nodes, istNode)
 	n.Connections = append(n.Connections, vizConnection {
 		Source: "INTERNET",
 		Target: "k8s-ist-1",
