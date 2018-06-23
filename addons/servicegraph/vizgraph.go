@@ -21,6 +21,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	// "github.com/gorilla/websocket"
@@ -45,8 +46,8 @@ type (
 	}
 
 	vizMetrics struct {
-		Normal float32  `json:"normal"`
-		Danger float32  `json:"danger"`
+		Normal float64  `json:"normal"`
+		Danger float64  `json:"danger"`
 	}
 
 	vizConnection struct {
@@ -62,7 +63,7 @@ type (
 		Class string                `json:"class,omitempty"`
 		Nodes []vizNode             `json:"nodes,omitempty"`
 		Connections []vizConnection `json:"connections,omitempty"`
-		Updated int64               `json:"udpated,omitempty"`
+		Updated int64               `json:"updated,omitempty"`
 	}
 )
 
@@ -163,17 +164,33 @@ func GenerateVizJSON3(w io.Writer, g *Dynamic) error {
 		istNode.Nodes = append(istNode.Nodes, n)
 	}
 
-	log.Print(g.Edges)
-
+	// log.Print(g.Edges)
+	var overallIstioRps = 0.0
 	for _, v := range g.Edges {
-		log.Print(v)
+		// log.Print(v.Labels)
+
+		var rps float64
+		rps = 0.0
+		rpsStr, ok := v.Labels["reqs/sec"]
+		if ok {
+			rpsParsed, err := strconv.ParseFloat(rpsStr, 64)
+			if err == nil {
+				rps = rpsParsed
+				if v.Target == "istio-ingress.istio-system (unknown)" {
+					overallIstioRps	= rps
+				}
+				log.Print(v.Source, v.Target, rps)
+			}
+		}
 
 		l := vizConnection {
 			Source: v.Source,
 			Target: v.Target,
 			Metrics: vizMetrics {
-				Normal: 1000,
-				Danger: 100,
+				// Normal: 999.7,
+				// Danger: 100.3,
+				Normal: rps * 100,
+				Danger: 0.0,
 			},
 		}
 		istNode.Connections = append(istNode.Connections, l)
@@ -184,8 +201,8 @@ func GenerateVizJSON3(w io.Writer, g *Dynamic) error {
 		Source: "INTERNET",
 		Target: "k8s-ist-1",
 		Metrics: vizMetrics {
-			Normal: 26037.626,
-			Danger: 92.37,
+			Normal: overallIstioRps * 100, // 26037.626,
+			Danger: 0.0,
 		},
 	})
 
