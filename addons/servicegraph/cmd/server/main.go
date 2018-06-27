@@ -21,20 +21,11 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
-
-	"github.com/gorilla/websocket"
 
 	"istio.io/istio/addons/servicegraph"
 	"istio.io/istio/addons/servicegraph/dot"
 	"istio.io/istio/addons/servicegraph/promgen"
 )
-
-var upgrader = websocket.Upgrader{
-	CheckOrigin: func(r *http.Request) bool {
-		return true;
-	},
-}
 
 func writeJSON(w io.Writer, g *servicegraph.Dynamic) error {
 	return json.NewEncoder(w).Encode(g)
@@ -81,44 +72,6 @@ type state struct {
 	staticGraph *servicegraph.Static
 }
 
-func vizSocket(w http.ResponseWriter, r *http.Request) {
-	log.Print("Entered vizSocket")
-
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("upgrade:", err)
-		return
-	}
-	defer func() {
-		log.Print("About to close websocket")
-		c.Close()
-	}()
-
-	ticker := time.NewTicker(time.Second * 1)
-	// goroutine to write on the websocket, should be stopped if a close is detected
-	go func() {
-		for range ticker.C {
-			log.Print("Ticker ...");
-			err = c.WriteMessage(websocket.TextMessage, []byte("NGK.."))
-			if err != nil {
-				log.Println("write:", err)
-				break
-			}
-		}
-	}()
-
-	for {
-		// We don't expect to read anything from the client on the websocket
-		// but we do need to detect close of the socket so we can clean up
-		if _, _, err := c.NextReader(); err != nil {
-			log.Print("reader got error", err)
-			c.Close()
-			ticker.Stop()
-			break;
-		}
-	}
-}
-
 func main() {
 	bindAddr := flag.String("bindAddr", ":8088", "Address to bind to for serving")
 	promAddr := flag.String("prometheusAddr", "http://localhost:9090", "Address of prometheus instance for graph generation")
@@ -136,7 +89,7 @@ func main() {
 	http.Handle("/dotviz", promgen.NewPromHandler(*promAddr, s.staticGraph, dot.GenerateHTML))
 	http.Handle("/d3graph", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateD3JSON))
 	http.Handle("/vizgraph", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON))
-	http.HandleFunc("/vizSocket", vizSocket)
+	http.Handle("/vizSocket", promgen.NewPromSockHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON))
 
 	log.Printf("Starting servicegraph service at %s", *bindAddr)
 	log.Fatal(http.ListenAndServe(*bindAddr, nil))
