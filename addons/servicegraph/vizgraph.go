@@ -23,8 +23,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	// "github.com/gorilla/websocket"
 )
 
 type (
@@ -64,6 +62,7 @@ type (
 		Nodes []vizNode             `json:"nodes,omitempty"`
 		Connections []vizConnection `json:"connections,omitempty"`
 		Updated int64               `json:"updated,omitempty"`
+		MaxVolume float64           `json:"maxVolume,omitempty"`
 	}
 )
 
@@ -154,6 +153,7 @@ func GenerateVizJSON3(w io.Writer, g *Dynamic) error {
 		Renderer: "region",
 		Class: "normal",
 		Updated: time.Now().UnixNano() / 1000000,
+		MaxVolume: 1000,
 		Nodes: make([]vizNode, 0, len(g.Nodes)),
 		Connections: make([]vizConnection, 0, len(g.Edges)),
 	}
