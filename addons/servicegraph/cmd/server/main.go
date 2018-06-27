@@ -17,7 +17,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"html/template"
 	"io"
 	"log"
 	"net/http"
@@ -82,34 +81,8 @@ type state struct {
 	staticGraph *servicegraph.Static
 }
 
-func echo(w http.ResponseWriter, r *http.Request) {
-
-	log.Print("In echo")
-
-	c, err := upgrader.Upgrade(w, r, nil)
-	if err != nil {
-		log.Print("upgrade:", err)
-		return
-	}
-	defer c.Close()
-	for {
-		mt, message, err := c.ReadMessage()
-		if err != nil {
-			log.Println("read:", err)
-			break
-		}
-		log.Printf("recv: %s", message)
-		err = c.WriteMessage(mt, message)
-		if err != nil {
-			log.Println("write:", err)
-			break
-		}
-	}
-}
-
 func vizSocket(w http.ResponseWriter, r *http.Request) {
-
-	log.Print("In vizSocket")
+	log.Print("Entered vizSocket")
 
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
@@ -117,14 +90,15 @@ func vizSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer func() {
-		log.Print("in defer")
+		log.Print("About to close websocket")
 		c.Close()
 	}()
 
 	ticker := time.NewTicker(time.Second * 1)
+	// goroutine to write on the websocket, should be stopped if a close is detected
 	go func() {
-		for t := range ticker.C {
-			log.Print("Ticker ticked at", t);
+		for range ticker.C {
+			log.Print("Ticker ...");
 			err = c.WriteMessage(websocket.TextMessage, []byte("NGK.."))
 			if err != nil {
 				log.Println("write:", err)
@@ -134,6 +108,8 @@ func vizSocket(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	for {
+		// We don't expect to read anything from the client on the websocket
+		// but we do need to detect close of the socket so we can clean up
 		if _, _, err := c.NextReader(); err != nil {
 			log.Print("reader got error", err)
 			c.Close()
@@ -141,10 +117,6 @@ func vizSocket(w http.ResponseWriter, r *http.Request) {
 			break;
 		}
 	}
-}
-
-func home(w http.ResponseWriter, r *http.Request) {
-	homeTemplate.Execute(w, "ws://"+r.Host+"/echo")
 }
 
 func main() {
@@ -164,92 +136,8 @@ func main() {
 	http.Handle("/dotviz", promgen.NewPromHandler(*promAddr, s.staticGraph, dot.GenerateHTML))
 	http.Handle("/d3graph", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateD3JSON))
 	http.Handle("/vizgraph", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON))
-	http.Handle("/vizgraph1", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON1))
-	http.Handle("/vizgraph2", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON2))
-	http.Handle("/vizgraph3", promgen.NewPromHandler(*promAddr, s.staticGraph, servicegraph.GenerateVizJSON3))
-	http.HandleFunc("/echo", echo)
-	http.HandleFunc("/h", home)
 	http.HandleFunc("/vizSocket", vizSocket)
 
 	log.Printf("Starting servicegraph service at %s", *bindAddr)
 	log.Fatal(http.ListenAndServe(*bindAddr, nil))
 }
-
-var homeTemplate = template.Must(template.New("").Parse(`
-<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<script>
-window.addEventListener("load", function(evt) {
-
-    var output = document.getElementById("output");
-    var input = document.getElementById("input");
-    var ws;
-
-    var print = function(message) {
-        var d = document.createElement("div");
-        d.innerHTML = message;
-        output.appendChild(d);
-    };
-
-    document.getElementById("open").onclick = function(evt) {
-        if (ws) {
-            return false;
-        }
-        ws = new WebSocket("{{.}}");
-        ws.onopen = function(evt) {
-            print("OPEN");
-        }
-        ws.onclose = function(evt) {
-            print("CLOSE");
-            ws = null;
-        }
-        ws.onmessage = function(evt) {
-            print("RESPONSE: " + evt.data);
-        }
-        ws.onerror = function(evt) {
-            print("ERROR: " + evt.data);
-        }
-        return false;
-    };
-
-    document.getElementById("send").onclick = function(evt) {
-        if (!ws) {
-            return false;
-        }
-        print("SEND: " + input.value);
-        ws.send(input.value);
-        return false;
-    };
-
-    document.getElementById("close").onclick = function(evt) {
-        if (!ws) {
-            return false;
-        }
-        ws.close();
-        return false;
-    };
-
-});
-</script>
-</head>
-<body>
-<table>
-<tr><td valign="top" width="50%">
-<p>Click "Open" to create a connection to the server,
-"Send" to send a message to the server and "Close" to close the connection.
-You can change the message and send multiple times.
-<p>
-<form>
-<button id="open">Open</button>
-<button id="close">Close</button>
-<p><input id="input" type="text" value="Hello world!">
-<button id="send">Send</button>
-</form>
-</td><td valign="top" width="50%">
-<div id="output"></div>
-</td></tr></table>
-</body>
-</html>
-`))
