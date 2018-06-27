@@ -111,33 +111,35 @@ func vizSocket(w http.ResponseWriter, r *http.Request) {
 
 	log.Print("In vizSocket")
 
-	tickChan := time.NewTicker(time.Second * 2).C
-
 	c, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Print("upgrade:", err)
 		return
 	}
-	doneChan := make(chan bool)
 	defer func() {
-		log.Print("in defer", err)
+		log.Print("in defer")
 		c.Close()
-		doneChan <- true
 	}()
-	for {
-		select {
-		case <- tickChan:
-			log.Print("Ticker ticked");
+
+	ticker := time.NewTicker(time.Second * 1)
+	go func() {
+		for t := range ticker.C {
+			log.Print("Ticker ticked at", t);
 			err = c.WriteMessage(websocket.TextMessage, []byte("NGK.."))
 			if err != nil {
 				log.Println("write:", err)
 				break
 			}
-		case <- doneChan:
-			log.Print("Done");
-			return
 		}
-		log.Print("After select")
+	}()
+
+	for {
+		if _, _, err := c.NextReader(); err != nil {
+			log.Print("reader got error", err)
+			c.Close()
+			ticker.Stop()
+			break;
+		}
 	}
 }
 
