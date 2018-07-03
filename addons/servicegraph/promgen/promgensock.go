@@ -16,7 +16,6 @@
 package promgen
 
 import (
-	"io"
 	"log"
 	"net/http"
 	"time"
@@ -33,15 +32,14 @@ var upgrader = websocket.Upgrader{
 }
 
 type promSockHandler struct {
-	addr   string
-	static *servicegraph.Static
-	writer servicegraph.SerializeFn
+	ph *promHandler
 }
 
 // NewPromHandler returns a new http.Handler that will serve servicegraph data
 // based on queries against a prometheus backend.
 func NewPromSockHandler(addr string, static *servicegraph.Static, writer servicegraph.SerializeFn) http.Handler {
-	return &promSockHandler{addr, static, writer}
+	ph := &promHandler{addr, static, writer}
+	return &promSockHandler{ph}
 }
 
 func (p *promSockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -57,27 +55,36 @@ func (p *promSockHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		c.Close()
 	}()
 
-	ticker := time.NewTicker(time.Second * 1)
+	ticker := time.NewTicker(time.Second * 10)
 	// goroutine to write on the websocket, should be stopped if a close is detected
 	go func() {
 		for range ticker.C {
 			log.Print("Ticker ...")
 
-			// err = c.WriteMessage(websocket.TextMessage, []byte("NGK.."))
-			// if err != nil {
-			// 	log.Println("write:", err)
-			// 	break
-			// }
-			w, err := c.NextWriter(websocket.TextMessage)
+			wsw, err := c.NextWriter(websocket.TextMessage)
 			if err != nil {
 				log.Println("NextWriter:", err)
 				break
 			}
-			if _, err := io.WriteString(w, "NGK2.."); err != nil {
-				log.Println("WriteString:", err)
+
+			// This is borrowed from promgen
+			timeHorizon := "10s"
+			filterEmpty := false
+			g, err := p.ph.generate(genOpts{timeHorizon, filterEmpty})
+			g.Merge(p.ph.static)
+			if err != nil {
+				log.Println("GenerateOrMerge:", err)
 				break
 			}
-			if err := w.Close(); err != nil {
+
+			err = p.ph.writer(wsw, g)
+			if err != nil {
+				// writeError(w, err)
+				log.Println("JSONWriter:", err)
+				break
+			}
+
+			if err := wsw.Close(); err != nil {
 				log.Println("Close:", err)
 				break
 			}

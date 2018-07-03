@@ -64,7 +64,7 @@ func GenerateVizJSON(w io.Writer, g *Dynamic) error {
 		Name: "k8s-ist-1",
 		Renderer: "region",
 		Class: "normal",
-		Updated: time.Now().UnixNano() / 1000000,
+		Updated: time.Now().Unix(),
 		MaxVolume: 1000,
 		Nodes: make([]vizNode, 0, len(g.Nodes)),
 		Connections: make([]vizConnection, 0, len(g.Edges)),
@@ -90,8 +90,9 @@ func GenerateVizJSON(w io.Writer, g *Dynamic) error {
 				rps = rpsParsed
 				if v.Target == "istio-ingress.istio-system (unknown)" {
 					overallIstioRps	= rps
+					log.Print(overallIstioRps)
 				}
-				log.Print(v.Source, v.Target, rps)
+				// log.Print(v.Source, v.Target, rps)
 			}
 		}
 
@@ -101,7 +102,7 @@ func GenerateVizJSON(w io.Writer, g *Dynamic) error {
 			Metrics: vizMetrics {
 				// Normal: 999.7,
 				// Danger: 100.3,
-				Normal: rps * 100,
+				Normal: rps * 5,
 				Danger: 0.0,
 			},
 		}
@@ -113,7 +114,7 @@ func GenerateVizJSON(w io.Writer, g *Dynamic) error {
 		Source: "INTERNET",
 		Target: "k8s-ist-1",
 		Metrics: vizMetrics {
-			Normal: overallIstioRps * 100, // 26037.626,
+			Normal: overallIstioRps * 5, // 26037.626,
 			Danger: 0.0,
 		},
 	})
