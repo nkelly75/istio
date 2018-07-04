@@ -1,0 +1,26 @@
+config:
+  target: 'http://192.168.99.100:30116'
+  phases:
+    - duration: 30
+      arrivalRate: 10
+      name: "Start at 10"
+    - duration: 30
+      arrivalRate: 10
+      rampTo: 20
+      name: "Warm up to 20"
+    - duration: 30
+      arrivalRate: 20
+      name: "Sustain at 20"
+    - pause: 20
+      name: "Do nothing for 20"
+    - duration: 40
+      arrivalRate: 10
+      rampTo: 40
+      name: "Spike up to 40"
+    - duration: 30
+      arrivalRate: 10
+      name: "Sustain at 10"
+scenarios:
+  - flow:
+    - get:
+        url: "/productpage"
