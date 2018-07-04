@@ -31,7 +31,8 @@ import (
 	"istio.io/istio/addons/servicegraph"
 )
 
-const reqsFmt = "sum(rate(istio_request_count[%s])) by (source_service, destination_service, source_version, destination_version)"
+const reqsFmt = "sum(rate(istio_request_count{response_code!~\"[45]..\"}[%s])) by (source_service, destination_service, source_version, destination_version)"
+const errReqsFmt = "sum(rate(istio_request_count{response_code=~\"[45]..\"}[%s])) by (source_service, destination_service, source_version, destination_version)"
 const tcpFmt = "sum(rate(istio_tcp_bytes_received[%s])) by (source_service, destination_service, source_version, destination_version)"
 const emptyFilter = " > 0"
 
@@ -55,7 +56,7 @@ func NewPromHandler(addr string, static *servicegraph.Static, writer servicegrap
 func (p *promHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	timeHorizon := r.URL.Query().Get("time_horizon")
 	if timeHorizon == "" {
-		timeHorizon = "5m"
+		timeHorizon = "10s" // "5m"
 	}
 	filterEmpty := false
 	filterEmptyStr := r.URL.Query().Get("filter_empty")
@@ -109,6 +110,17 @@ func (p *promHandler) generate(opts genOpts) (*servicegraph.Dynamic, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// NGK: Separate graph for errors
+	query = fmt.Sprintf(errReqsFmt, opts.timeHorizon)
+	if opts.filterEmpty {
+		query += emptyFilter
+	}
+	errGraph, err := extractGraph(api, query, "errs/sec")
+	if err != nil {
+		return nil, err
+	}
+
 	query = fmt.Sprintf(tcpFmt, opts.timeHorizon)
 	if opts.filterEmpty {
 		query += emptyFilter
@@ -117,7 +129,13 @@ func (p *promHandler) generate(opts genOpts) (*servicegraph.Dynamic, error) {
 	if err != nil {
 		return nil, err
 	}
-	return merge(graph, tcpGraph)
+
+	merge2, err := merge(graph, errGraph)
+	if err != nil {
+		return nil, err
+	}
+
+	return merge(merge2, tcpGraph)
 }
 
 func merge(g1, g2 *servicegraph.Dynamic) (*servicegraph.Dynamic, error) {

@@ -76,37 +76,66 @@ func GenerateVizJSON(w io.Writer, g *Dynamic) error {
 		istNode.Nodes = append(istNode.Nodes, n)
 	}
 
-	// log.Print(g.Edges)
-	var overallIstioRps = 0.0
-	for _, v := range g.Edges {
-		// log.Print(v.Labels)
+	vizceralScalingFactor := 10.0
 
-		var rps float64
-		rps = 0.0
+	connectionsMap := make(map[string]*vizConnection)
+	var overallIstioNormRPS = 0.0
+	var overallIstioErrRPS = 0.0
+	for _, v := range g.Edges {
+		// log.Print(v.Source, v.Target, v.Labels)
+		// log.Printf("%+v\n", v)
+
+		var metrics vizMetrics
 		rpsStr, ok := v.Labels["reqs/sec"]
 		if ok {
-			rpsParsed, err := strconv.ParseFloat(rpsStr, 64)
+			normRPSParsed, err := strconv.ParseFloat(rpsStr, 64)
 			if err == nil {
-				rps = rpsParsed
+				metrics.Normal = normRPSParsed * vizceralScalingFactor
 				if v.Target == "istio-ingress.istio-system (unknown)" {
-					overallIstioRps	= rps
-					log.Print(overallIstioRps)
+					overallIstioNormRPS	= normRPSParsed
+					log.Printf("Istio Normal RPS %f, scaled to %f", overallIstioNormRPS, overallIstioNormRPS * vizceralScalingFactor)
 				}
-				// log.Print(v.Source, v.Target, rps)
+			}
+		}
+		epsStr, ok := v.Labels["errs/sec"]
+		if ok {
+			errRPSParsed, err := strconv.ParseFloat(epsStr, 64)
+			if err == nil {
+				metrics.Danger = errRPSParsed * vizceralScalingFactor
+				if v.Target == "istio-ingress.istio-system (unknown)" {
+					overallIstioErrRPS	= errRPSParsed
+					log.Printf("Istio Error RPS %f, scaled to %f", overallIstioErrRPS, overallIstioErrRPS * vizceralScalingFactor)
+				}
 			}
 		}
 
 		l := vizConnection {
 			Source: v.Source,
 			Target: v.Target,
-			Metrics: vizMetrics {
-				// Normal: 999.7,
-				// Danger: 100.3,
-				Normal: rps * 5,
-				Danger: 0.0,
-			},
+			Metrics: metrics,
 		}
-		istNode.Connections = append(istNode.Connections, l)
+
+		// Merge the new vizConnection into map of existing connections
+		connKey := v.Source + v.Target
+		existing, found := connectionsMap[connKey]
+		if found {
+			// log.Printf("Found %s in map", connKey)
+			if (l.Metrics.Normal > existing.Metrics.Normal) {
+				existing.Metrics.Normal = l.Metrics.Normal
+			}
+			if (l.Metrics.Danger > existing.Metrics.Danger) {
+				existing.Metrics.Danger = l.Metrics.Danger
+			}
+			connectionsMap[connKey].Metrics = existing.Metrics
+		} else {
+			// log.Printf("Added %s to map", connKey)
+			connectionsMap[connKey] = &l
+		}
+	}
+
+	// Take values from resulting map and add to array of Connections
+	for _, value := range connectionsMap {
+		istNode.Connections = append(istNode.Connections, *value)
 	}
 
 	n.Nodes = append(n.Nodes, istNode)
@@ -114,8 +143,8 @@ func GenerateVizJSON(w io.Writer, g *Dynamic) error {
 		Source: "INTERNET",
 		Target: "k8s-ist-1",
 		Metrics: vizMetrics {
-			Normal: overallIstioRps * 5, // 26037.626,
-			Danger: 0.0,
+			Normal: overallIstioNormRPS * vizceralScalingFactor,
+			Danger: overallIstioErrRPS * vizceralScalingFactor,
 		},
 	})
 
